@@ -12,7 +12,6 @@ struct InputState {
 }
 
 /// Mouse sensitivity and movement speed
-
 #[derive(Resource)]
 pub struct MovementSettings {
     pub sensitivity: f32,
@@ -24,6 +23,31 @@ impl Default for MovementSettings {
         Self {
             sensitivity: 0.00012,
             speed: 12.,
+        }
+    }
+}
+
+#[derive(Resource, Clone, Copy)]
+pub struct KeyBindings {
+    pub forward: KeyCode,
+    pub backward: KeyCode,
+    pub left: KeyCode,
+    pub right: KeyCode,
+    pub up: KeyCode,
+    pub down: KeyCode,
+    pub grab: KeyCode,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            forward: KeyCode::W,
+            backward: KeyCode::S,
+            left: KeyCode::A,
+            right: KeyCode::D,
+            up: KeyCode::Space,
+            down: KeyCode::LShift,
+            grab: KeyCode::Escape,
         }
     }
 }
@@ -69,6 +93,7 @@ fn setup_player(mut commands: Commands) {
 /// Handles keyboard input and movement
 fn player_move(
     keys: Res<Input<KeyCode>>,
+    bindings: Res<KeyBindings>,
     time: Res<Time>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     settings: Res<MovementSettings>,
@@ -82,17 +107,21 @@ fn player_move(
             let right = Vec3::new(local_z.z, 0., -local_z.x);
 
             for key in keys.get_pressed() {
-                match window.cursor.grab_mode {
-                    CursorGrabMode::None => (),
-                    _ => match key {
-                        KeyCode::W => velocity += forward,
-                        KeyCode::S => velocity -= forward,
-                        KeyCode::A => velocity -= right,
-                        KeyCode::D => velocity += right,
-                        KeyCode::Space => velocity += Vec3::Y,
-                        KeyCode::LShift => velocity -= Vec3::Y,
-                        _ => (),
-                    },
+                if window.cursor.grab_mode != CursorGrabMode::None {
+                    let key = *key;
+                    if key == bindings.forward {
+                        velocity += forward;
+                    } else if key == bindings.backward {
+                        velocity -= forward;
+                    } else if key == bindings.left {
+                        velocity -= right;
+                    } else if key == bindings.right {
+                        velocity += right;
+                    } else if key == bindings.up {
+                        velocity += Vec3::Y;
+                    } else if key == bindings.down {
+                        velocity -= Vec3::Y;
+                    }
                 }
             }
 
@@ -143,10 +172,11 @@ fn player_look(
 
 fn cursor_grab(
     keys: Res<Input<KeyCode>>,
+    bindings: Res<KeyBindings>,
     mut primary_window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     if let Ok(mut window) = primary_window.get_single_mut() {
-        if keys.just_pressed(KeyCode::Escape) {
+        if keys.just_pressed(bindings.grab) {
             toggle_grab_cursor(&mut window);
         }
     } else {
@@ -155,16 +185,38 @@ fn cursor_grab(
 }
 
 /// Contains everything needed to add first-person fly camera behavior to your game
-pub struct PlayerPlugin;
+pub struct PlayerPlugin {
+    pub spawn_camera: bool,
+    pub cursor_grab_on_startup: bool,
+    pub key_bindings: KeyBindings,
+}
+
+impl Default for PlayerPlugin {
+    fn default() -> Self {
+        Self {
+            spawn_camera: true,
+            cursor_grab_on_startup: true,
+            key_bindings: KeyBindings::default(),
+        }
+    }
+}
+
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InputState>()
             .init_resource::<MovementSettings>()
-            .add_system(setup_player.on_startup())
-            .add_system(initial_grab_cursor.on_startup())
+            .insert_resource(self.key_bindings)
             .add_system(player_move)
             .add_system(player_look)
             .add_system(cursor_grab);
+
+        if self.spawn_camera {
+            app.add_system(setup_player.on_startup());
+        }
+
+        if self.cursor_grab_on_startup {
+            app.add_system(initial_grab_cursor.on_startup());
+        }
     }
 }
 
@@ -174,6 +226,7 @@ impl Plugin for NoCameraPlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InputState>()
             .init_resource::<MovementSettings>()
+            .insert_resource(KeyBindings::default())
             .add_system(initial_grab_cursor.on_startup())
             .add_system(player_move)
             .add_system(player_look)
