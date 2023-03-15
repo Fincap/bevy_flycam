@@ -188,6 +188,7 @@ fn cursor_grab(
 pub struct PlayerPlugin {
     pub spawn_camera: bool,
     pub cursor_grab_on_startup: bool,
+    pub cursor_grabbing_enabled: bool,
     pub key_bindings: KeyBindings,
 }
 
@@ -196,6 +197,7 @@ impl Default for PlayerPlugin {
         Self {
             spawn_camera: true,
             cursor_grab_on_startup: true,
+            cursor_grabbing_enabled: true,
             key_bindings: KeyBindings::default(),
         }
     }
@@ -207,8 +209,7 @@ impl Plugin for PlayerPlugin {
             .init_resource::<MovementSettings>()
             .insert_resource(self.key_bindings)
             .add_system(player_move)
-            .add_system(player_look)
-            .add_system(cursor_grab);
+            .add_system(player_look);
 
         if self.spawn_camera {
             app.add_system(setup_player.on_startup());
@@ -216,6 +217,10 @@ impl Plugin for PlayerPlugin {
 
         if self.cursor_grab_on_startup {
             app.add_system(initial_grab_cursor.on_startup());
+        }
+
+        if self.cursor_grabbing_enabled {
+            app.add_system(cursor_grab);
         }
     }
 }
